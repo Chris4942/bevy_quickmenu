@@ -17,7 +17,7 @@ fn main() {
 
 /// This custom event can be emitted by the action handler (below) in order to
 /// process actions with access to the bevy ECS
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 enum BasicEvent {
     Close,
 }
@@ -36,7 +36,7 @@ impl Plugin for BasicPlugin {
     fn build(&self, app: &mut App) {
         app
             // Register a event that can be called from your action handler
-            .add_event::<BasicEvent>()
+            .add_message::<BasicEvent>()
             // The plugin
             .add_plugins(QuickMenuPlugin::<Screens>::new())
             // Some systems
@@ -46,7 +46,7 @@ impl Plugin for BasicPlugin {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera3d::default());
     // Create a default stylesheet. You can customize these as you wish
     let sheet = Stylesheet::default();
 
@@ -69,10 +69,10 @@ enum Actions {
 impl ActionTrait for Actions {
     type State = BasicState;
     type Event = BasicEvent;
-    fn handle(&self, state: &mut BasicState, event_writer: &mut EventWriter<BasicEvent>) {
+    fn handle(&self, state: &mut BasicState, event_writer: &mut MessageWriter<BasicEvent>) {
         match self {
             Actions::Close => {
-                event_writer.send(BasicEvent::Close);
+                event_writer.write(BasicEvent::Close);
             }
             Actions::Toggle1 => {
                 state.boolean1 = !state.boolean1;
@@ -130,7 +130,7 @@ fn boolean_menu(state: &BasicState) -> Menu<Screens> {
 
 /// This allows to react to actions with custom bevy resources or eventwriters or queries.
 /// In this example we use it to close the menu
-fn event_reader(mut commands: Commands, mut event_reader: EventReader<BasicEvent>) {
+fn event_reader(mut commands: Commands, mut event_reader: MessageReader<BasicEvent>) {
     for event in event_reader.read() {
         match event {
             BasicEvent::Close => bevy_quickmenu::cleanup(&mut commands),

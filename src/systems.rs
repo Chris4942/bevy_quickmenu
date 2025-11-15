@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{input::keyboard::KeyboardInput, prelude::*};
 
 use crate::{
     types::{self, ButtonComponent, CleanUpUI, MenuAssets, NavigationEvent, QuickMenuComponent},
@@ -6,55 +6,63 @@ use crate::{
 };
 
 pub fn keyboard_input_system(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut keyboard_input: MessageReader<KeyboardInput>,
     mut writer: MessageWriter<NavigationEvent>,
     gamepads: Query<&Gamepad>,
-    button_inputs: Res<ButtonInput<GamepadButton>>,
-    axes: Res<Axis<GamepadAxis>>,
 ) {
     use NavigationEvent::*;
-    if keyboard_input.just_pressed(KeyCode::ArrowDown) {
-        writer.write(Down);
-    } else if keyboard_input.just_pressed(KeyCode::ArrowUp) {
-        writer.write(Up);
-    } else if keyboard_input.just_pressed(KeyCode::Enter) {
-        writer.write(Select);
-    } else if keyboard_input.just_pressed(KeyCode::Backspace) {
-        writer.write(Back);
+    for event in keyboard_input.read() {
+        match event.key_code {
+            KeyCode::ArrowDown => {
+                writer.write(Down);
+            }
+            KeyCode::ArrowUp => {
+                writer.write(Up);
+            }
+            KeyCode::Enter => {
+                writer.write(Select);
+            }
+            KeyCode::Backspace => {
+                writer.write(Back);
+            }
+            _ => {}
+        };
     }
 
     for gamepad in gamepads {
-        if button_inputs.just_pressed(GamepadButton::DPadDown) {
+        if gamepad.just_pressed(GamepadButton::DPadDown) {
             writer.write(Down);
-        } else if button_inputs.just_pressed(GamepadButton::DPadUp) {
+        } else if gamepad.just_pressed(GamepadButton::DPadUp) {
             writer.write(Up);
-        } else if button_inputs.just_pressed(GamepadButton::DPadRight) {
+        } else if gamepad.just_pressed(GamepadButton::DPadRight) {
             writer.write(Back);
-        } else if button_inputs.just_pressed(GamepadButton::South)
-            || button_inputs.just_pressed(GamepadButton::West)
+        } else if gamepad.just_pressed(GamepadButton::South)
+            || gamepad.just_pressed(GamepadButton::West)
         {
             writer.write(Select);
-        } else if button_inputs.just_pressed(GamepadButton::East)
-            || button_inputs.just_pressed(GamepadButton::North)
+        } else if gamepad.just_pressed(GamepadButton::East)
+            || gamepad.just_pressed(GamepadButton::North)
         {
             writer.write(Back);
         }
-        if axes.is_changed() {
-            for (axis, check_negative, action) in [
-                (GamepadAxis::LeftStickX, true, Back),
-                (GamepadAxis::LeftStickY, true, Down),
-                (GamepadAxis::LeftStickY, false, Up),
-                (GamepadAxis::RightStickX, true, Back),
-                (GamepadAxis::RightStickY, true, Down),
-                (GamepadAxis::RightStickY, false, Up),
-            ] {
-                if let Some(value) = gamepad.get(axis) {
-                    if (check_negative && value < -0.1) || (!check_negative && value > 0.1) {
-                        writer.write(action);
-                    }
-                }
-            }
-        }
+        // TODO: this block of code would detect inputs from the sticks, but the functions we were
+        // relying on have been removed without a modern equivalent
+        // if gamepad. {
+        //     for (axis, check_negative, action) in [
+        //         (GamepadAxis::LeftStickX, true, Back),
+        //         (GamepadAxis::LeftStickY, true, Down),
+        //         (GamepadAxis::LeftStickY, false, Up),
+        //         (GamepadAxis::RightStickX, true, Back),
+        //         (GamepadAxis::RightStickY, true, Down),
+        //         (GamepadAxis::RightStickY, false, Up),
+        //     ] {
+        //         if let Some(value) = gamepad.get(axis) {
+        //             if (check_negative && value < -0.1) || (!check_negative && value > 0.1) {
+        //                 writer.write(action);
+        //             }
+        //         }
+        //     }
+        // }
     }
 }
 
