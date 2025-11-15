@@ -25,7 +25,7 @@ fn main() {
 
 /// This custom event can be emitted by the action handler (below) in order to
 /// process actions with access to the bevy ECS
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 enum BasicEvent {
     Close,
 }
@@ -51,7 +51,7 @@ impl Plugin for BasicPlugin {
 
         app
             // Register a event that can be called from your action handler
-            .add_event::<BasicEvent>()
+            .add_message::<BasicEvent>()
             // The plugin
             .add_plugins(QuickMenuPlugin::<Screens>::with_options(options))
             // Some systems
@@ -61,7 +61,7 @@ impl Plugin for BasicPlugin {
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera3d::default());
     // Create a customized stylesheet
     let mut button_style = StyleEntry::button();
     button_style.size = 25.0;
@@ -97,10 +97,10 @@ enum Actions {
 impl ActionTrait for Actions {
     type State = BasicState;
     type Event = BasicEvent;
-    fn handle(&self, state: &mut BasicState, event_writer: &mut EventWriter<BasicEvent>) {
+    fn handle(&self, state: &mut BasicState, event_writer: &mut MessageWriter<BasicEvent>) {
         match self {
             Actions::Close => {
-                event_writer.send(BasicEvent::Close);
+                event_writer.write(BasicEvent::Close);
             }
             Actions::Toggle1 => {
                 state.boolean1 = !state.boolean1;
@@ -138,7 +138,7 @@ fn root_menu(state: &BasicState) -> Menu<Screens> {
         vec![
             MenuItem::headline([
                 RichTextEntry::new("Rich "),
-                RichTextEntry::new_color("Text ", Color::srgb(1.0,0.0,0.0)),
+                RichTextEntry::new_color("Text ", Color::srgb(1.0, 0.0, 0.0)),
                 RichTextEntry::new_color("!", Color::srgb(1.0, 1.0, 0.0)),
             ]),
             MenuItem::action("Close", Actions::Close).with_icon(MenuIcon::Back),
@@ -160,8 +160,8 @@ fn boolean_menu(state: &BasicState) -> Menu<Screens> {
             MenuItem::action("Toggle Boolean 2", Actions::Toggle2).checked(state.boolean2),
         ],
     )
-    .with_background(BackgroundColor(Color::srgb(0.0,0.0,0.5)))
-    .with_style(Style {
+    .with_background(BackgroundColor(Color::srgb(0.0, 0.0, 0.5)))
+    .with_style(Node {
         align_items: AlignItems::FlexEnd,
         flex_direction: FlexDirection::Column,
         ..Default::default()
@@ -170,7 +170,7 @@ fn boolean_menu(state: &BasicState) -> Menu<Screens> {
 
 /// This allows to react to actions with custom bevy resources or eventwriters or queries.
 /// In this example we use it to close the menu
-fn event_reader(mut commands: Commands, mut event_reader: EventReader<BasicEvent>) {
+fn event_reader(mut commands: Commands, mut event_reader: MessageReader<BasicEvent>) {
     for event in event_reader.read() {
         match event {
             BasicEvent::Close => bevy_quickmenu::cleanup(&mut commands),
