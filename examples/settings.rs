@@ -4,7 +4,9 @@
 //! It also shows how to get from the Settings to the game and back.
 //! Due to the way Bevy handles GameStates (which will soon be rewritten),
 //! composing menus and games looks a bit convoluted.
-use bevy::{prelude::*, utils::HashMap};
+use bevy::prelude::*;
+
+use std::collections::HashMap;
 
 use bevy_quickmenu::{
     style::Stylesheet, ActionTrait, Menu, MenuIcon, MenuItem, MenuState, QuickMenuPlugin,
@@ -39,7 +41,7 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera3dBundle::default());
+    commands.spawn(Camera3d::default());
 }
 
 mod settings {
@@ -47,7 +49,7 @@ mod settings {
 
     /// This custom event can be emitted by the action handler (below) in order to
     /// process actions with access to the bevy ECS
-    #[derive(Debug, Event)]
+    #[derive(Debug, Message)]
     enum MyEvent {
         CloseSettings,
     }
@@ -57,7 +59,7 @@ mod settings {
     #[derive(Debug, Clone)]
     struct CustomState {
         sound_on: bool,
-        gamepads: Vec<(Gamepad, String)>,
+        gamepads: Vec<usize>,
         controls: HashMap<usize, ControlDevice>,
         logo: Handle<Image>,
     }
@@ -68,7 +70,7 @@ mod settings {
         fn build(&self, app: &mut App) {
             app
                 // Register a event that can be called from your action handler
-                .add_event::<MyEvent>()
+                .add_message::<MyEvent>()
                 // The plugin
                 .add_plugins(QuickMenuPlugin::<Screens>::new())
                 // Some systems
@@ -105,7 +107,7 @@ mod settings {
     /// Whenever a new gamepad connects, get the known gamepads and their names
     /// into our state
     fn update_gamepads_system(
-        gamepads: Res<Gamepads>,
+        gamepads: Query<&Gamepad>,
         menu_state: Option<ResMut<MenuState<Screens>>>,
     ) {
         let Some(mut menu_state) = menu_state else {
@@ -113,11 +115,11 @@ mod settings {
         };
         let gamepads = gamepads
             .iter()
-            .map(|p| {
-                (
-                    p,
-                    gamepads.name(p).map(|s| s.to_owned()).unwrap_or_default(),
-                )
+            .map(|gamepad| {
+                gamepad
+                    .product_id()
+                    .map(|v| v as usize)
+                    .unwrap_or(usize::MAX)
             })
             .collect();
         if menu_state.state().gamepads != gamepads {
@@ -138,10 +140,10 @@ mod settings {
     impl ActionTrait for Actions {
         type State = CustomState;
         type Event = MyEvent;
-        fn handle(&self, state: &mut CustomState, event_writer: &mut EventWriter<MyEvent>) {
+        fn handle(&self, state: &mut CustomState, event_writer: &mut MessageWriter<MyEvent>) {
             match self {
                 Actions::Close => {
-                    event_writer.send(MyEvent::CloseSettings);
+                    event_writer.write(MyEvent::CloseSettings);
                 }
                 Actions::SoundOn => {
                     state.sound_on = true;
@@ -235,11 +237,14 @@ mod settings {
         .collect();
 
         // Get the GamePads
-        for (pad, title) in &state.gamepads {
-            let device = ControlDevice::Gamepad { gamepad_id: pad.id };
+        for title in &state.gamepads {
+            let device = ControlDevice::Gamepad { gamepad_id: *title };
             entries.push(
-                MenuItem::action(title, Actions::Control(player, device))
-                    .checked(device.id() == selected_control.id()),
+                MenuItem::action(
+                    format!("Controller id: {:}", title),
+                    Actions::Control(player, device),
+                )
+                .checked(device.id() == selected_control.id()),
             )
         }
 
@@ -250,7 +255,7 @@ mod settings {
     /// In this example we use it to close the menu
     fn event_reader(
         mut commands: Commands,
-        mut event_reader: EventReader<MyEvent>,
+        mut event_reader: MessageReader<MyEvent>,
         mut next_state: ResMut<NextState<GameState>>,
     ) {
         for event in event_reader.read() {
@@ -362,22 +367,22 @@ mod game {
     struct GameComponent;
 
     fn setup_system(mut commands: Commands, asset_server: Res<AssetServer>) {
-        commands
-            .spawn((TextBundle::from_section(
-                "Return Key to go back to menu",
-                TextStyle {
-                    font: asset_server.load("font.otf"),
-                    font_size: 30.0,
-                    color: Color::WHITE,
-                },
-            )
-            .with_style(Style {
+        commands.spawn((
+            Text("Return Key to go back to menu".to_string()),
+            TextFont {
+                font: asset_server.load("font.otf"),
+                font_size: 30.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(60.0),
                 left: Val::Px(50.0),
                 ..default()
-            }),))
-            .insert(GameComponent);
+            },
+            GameComponent,
+        ));
     }
 
     fn detect_close_system(
@@ -388,7 +393,7 @@ mod game {
     ) {
         if keyboard_input.just_pressed(KeyCode::Enter) {
             for entity in game_items.iter() {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
             next_state.set(GameState::Settings);
         }
