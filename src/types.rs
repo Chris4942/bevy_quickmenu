@@ -299,11 +299,9 @@ pub enum WidgetLabel {
 impl WidgetLabel {
     pub fn bundle(&self, default_font: &TextFont, default_color: &TextColor) -> Vec<impl Bundle> {
         match self {
-            Self::PlainText(text) => vec![(
-                Text(text.clone()),
-                default_font.clone(),
-                default_color.clone(),
-            )],
+            Self::PlainText(text) => {
+                vec![(Text(text.clone()), default_font.clone(), *default_color)]
+            }
             Self::RichText(entries) => entries
                 .iter()
                 .map(|entry| {

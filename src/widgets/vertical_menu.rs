@@ -119,7 +119,7 @@ where
                             parent.spawn((
                                 style,
                                 ImageNode {
-                                    image: i.clone().into(),
+                                    image: i.clone(),
                                     ..default()
                                 },
                             ));
@@ -218,7 +218,7 @@ where
                             ..default()
                         },
                         ImageNode {
-                            image: image_handle.into(),
+                            image: image_handle,
                             ..default()
                         },
                         BackgroundColor(style.icon_style.tint_color),
