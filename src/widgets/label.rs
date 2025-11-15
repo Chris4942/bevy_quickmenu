@@ -15,31 +15,34 @@ impl<'a> LabelWidget<'a> {
 }
 
 impl<'a> Widget for LabelWidget<'a> {
-    fn build(self, parent: &mut ChildBuilder, assets: &MenuAssets) {
+    fn build(self, parent: &mut ChildSpawnerCommands, assets: &MenuAssets) {
         let LabelWidget { text, style, .. } = self;
 
         let (bg, fg) = (style.normal.bg, style.selected.fg);
 
-        let text_style = TextStyle {
+        let font = TextFont {
             font: assets.font.clone(),
             font_size: style.size,
-            color: fg,
+            ..default()
         };
 
+        let color = TextColor(fg);
+
         parent
-            .spawn(ButtonBundle {
-                style: Style {
+            .spawn((
+                Node {
                     margin: style.margin,
                     padding: style.padding,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                background_color: BackgroundColor(bg),
-                ..default()
-            })
+                BackgroundColor(bg),
+            ))
             .with_children(|parent| {
-                parent.spawn(text.bundle(&text_style));
+                for child in text.bundle(&font, &color) {
+                    parent.spawn(child);
+                }
             });
     }
 }

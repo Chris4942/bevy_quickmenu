@@ -193,8 +193,8 @@ where
         app.insert_resource(self.options.unwrap_or_default())
             .init_resource::<MenuAssets>()
             .insert_resource(Selections::default())
-            .add_event::<NavigationEvent>()
-            .add_event::<RedrawEvent>()
+            .add_message::<NavigationEvent>()
+            .add_message::<RedrawEvent>()
             .add_systems(
                 Update,
                 systems::cleanup_system::<S>.run_if(resource_exists::<CleanUpUI>),
@@ -220,8 +220,8 @@ pub fn cleanup(commands: &mut Commands) {
 /// are generated as the user interacts with the menu
 pub trait ActionTrait: Debug + PartialEq + Eq + Clone + Copy + Hash + Send + Sync {
     type State;
-    type Event: Event + Send + Sync + 'static;
-    fn handle(&self, state: &mut Self::State, event_writer: &mut EventWriter<Self::Event>);
+    type Event: Message + Send + Sync + 'static;
+    fn handle(&self, state: &mut Self::State, event_writer: &mut MessageWriter<Self::Event>);
 }
 
 /// Each Menu / Screen uses this trait to define which menu items lead

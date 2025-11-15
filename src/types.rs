@@ -1,11 +1,11 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::ScreenTrait;
+use bevy::asset::RenderAssetUsages;
+use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
-use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::texture::{CompressedImageFormats, ImageSampler, ImageType};
-use bevy::utils::HashMap;
 
 #[derive(Component)]
 pub struct QuickMenuComponent;
@@ -45,7 +45,7 @@ pub struct Selections(pub HashMap<WidgetId, usize>);
 /// which are then processed by a system and applied to the menu.
 /// Navigation can be customized by sending these events into a
 /// `EventWriter<NavigationEvent>`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Event)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Message)]
 pub enum NavigationEvent {
     Up,
     Down,
@@ -55,7 +55,7 @@ pub enum NavigationEvent {
 
 /// Whenever a state change in the `MenuState` is detected,
 /// this event is send in order to tell the UI to re-render itself
-#[derive(Event)]
+#[derive(Message)]
 pub struct RedrawEvent;
 
 /// Create a menu with an identifier and a `Vec` of `MenuItem` entries
@@ -65,7 +65,7 @@ where
 {
     pub id: WidgetId,
     pub entries: Vec<MenuItem<S>>,
-    pub style: Option<Style>,
+    pub style: Option<Node>,
     pub background: Option<BackgroundColor>,
 }
 
@@ -88,7 +88,7 @@ where
         self
     }
 
-    pub fn with_style(mut self, style: Style) -> Self {
+    pub fn with_style(mut self, style: Node) -> Self {
         self.style = Some(style);
         self
     }
@@ -104,7 +104,7 @@ where
     Action(WidgetLabel, MenuIcon, S::Action),
     Label(WidgetLabel, MenuIcon),
     Headline(WidgetLabel, MenuIcon),
-    Image(Handle<Image>, Option<Style>),
+    Image(Handle<Image>, Option<Node>),
 }
 
 impl<S> MenuItem<S>
@@ -297,23 +297,31 @@ pub enum WidgetLabel {
 }
 
 impl WidgetLabel {
-    pub fn bundle(&self, default_style: &TextStyle) -> TextBundle {
+    pub fn bundle(&self, default_font: &TextFont, default_color: &TextColor) -> Vec<impl Bundle> {
         match self {
-            Self::PlainText(text) => TextBundle::from_section(text, default_style.clone()),
-            Self::RichText(entries) => TextBundle::from_sections(entries.iter().map(|entry| {
-                TextSection {
-                    value: entry.text.clone(),
-                    style: TextStyle {
-                        font: entry
-                            .font
-                            .as_ref()
-                            .cloned()
-                            .unwrap_or_else(|| default_style.font.clone()),
-                        font_size: entry.size.unwrap_or(default_style.font_size),
-                        color: entry.color.unwrap_or(default_style.color),
-                    },
-                }
-            })),
+            Self::PlainText(text) => vec![(
+                Text(text.clone()),
+                default_font.clone(),
+                default_color.clone(),
+            )],
+            Self::RichText(entries) => entries
+                .iter()
+                .map(|entry| {
+                    (
+                        Text(entry.text.clone()),
+                        TextFont {
+                            font: entry
+                                .font
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or_else(|| default_font.font.clone()),
+                            font_size: entry.size.unwrap_or(default_font.font_size),
+                            ..default()
+                        },
+                        TextColor(entry.color.unwrap_or(default_color.0)),
+                    )
+                })
+                .collect(),
         }
     }
 

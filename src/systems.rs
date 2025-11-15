@@ -7,53 +7,50 @@ use crate::{
 
 pub fn keyboard_input_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut writer: EventWriter<NavigationEvent>,
-    gamepads: Res<Gamepads>,
+    mut writer: MessageWriter<NavigationEvent>,
+    gamepads: Query<&Gamepad>,
     button_inputs: Res<ButtonInput<GamepadButton>>,
     axes: Res<Axis<GamepadAxis>>,
 ) {
     use NavigationEvent::*;
     if keyboard_input.just_pressed(KeyCode::ArrowDown) {
-        writer.send(Down);
+        writer.write(Down);
     } else if keyboard_input.just_pressed(KeyCode::ArrowUp) {
-        writer.send(Up);
+        writer.write(Up);
     } else if keyboard_input.just_pressed(KeyCode::Enter) {
-        writer.send(Select);
+        writer.write(Select);
     } else if keyboard_input.just_pressed(KeyCode::Backspace) {
-        writer.send(Back);
+        writer.write(Back);
     }
 
-    for gamepad in gamepads.iter() {
-        if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadDown)) {
-            writer.send(Down);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadUp))
+    for gamepad in gamepads {
+        if button_inputs.just_pressed(GamepadButton::DPadDown) {
+            writer.write(Down);
+        } else if button_inputs.just_pressed(GamepadButton::DPadUp) {
+            writer.write(Up);
+        } else if button_inputs.just_pressed(GamepadButton::DPadRight) {
+            writer.write(Back);
+        } else if button_inputs.just_pressed(GamepadButton::South)
+            || button_inputs.just_pressed(GamepadButton::West)
         {
-            writer.send(Up);
-        } else if button_inputs
-            .just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadRight))
+            writer.write(Select);
+        } else if button_inputs.just_pressed(GamepadButton::East)
+            || button_inputs.just_pressed(GamepadButton::North)
         {
-            writer.send(Back);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::South))
-            || button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::West))
-        {
-            writer.send(Select);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::East))
-            || button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::North))
-        {
-            writer.send(Back);
+            writer.write(Back);
         }
         if axes.is_changed() {
             for (axis, check_negative, action) in [
-                (GamepadAxisType::LeftStickX, true, Back),
-                (GamepadAxisType::LeftStickY, true, Down),
-                (GamepadAxisType::LeftStickY, false, Up),
-                (GamepadAxisType::RightStickX, true, Back),
-                (GamepadAxisType::RightStickY, true, Down),
-                (GamepadAxisType::RightStickY, false, Up),
+                (GamepadAxis::LeftStickX, true, Back),
+                (GamepadAxis::LeftStickY, true, Down),
+                (GamepadAxis::LeftStickY, false, Up),
+                (GamepadAxis::RightStickX, true, Back),
+                (GamepadAxis::RightStickY, true, Down),
+                (GamepadAxis::RightStickY, false, Up),
             ] {
-                if let Some(value) = axes.get(GamepadAxis::new(gamepad, axis)) {
+                if let Some(value) = gamepad.get(axis) {
                     if (check_negative && value < -0.1) || (!check_negative && value > 0.1) {
-                        writer.send(action);
+                        writer.write(action);
                     }
                 }
             }
@@ -66,7 +63,7 @@ pub fn redraw_system<S>(
     existing: Query<Entity, With<QuickMenuComponent>>,
     mut menu_state: ResMut<MenuState<S>>,
     selections: Res<Selections>,
-    redraw_reader: EventReader<RedrawEvent>,
+    redraw_reader: MessageReader<RedrawEvent>,
     assets: Res<MenuAssets>,
     // mut initial_render_done: Local<bool>,
 ) where
@@ -79,18 +76,18 @@ pub fn redraw_system<S>(
     }
     if can_redraw {
         for item in existing.iter() {
-            commands.entity(item).despawn_recursive();
+            commands.entity(item).despawn();
         }
         menu_state.menu.show(&assets, &selections, &mut commands);
     }
 }
 
 pub fn input_system<S>(
-    mut reader: EventReader<NavigationEvent>,
+    mut reader: MessageReader<NavigationEvent>,
     mut menu_state: ResMut<MenuState<S>>,
-    mut redraw_writer: EventWriter<RedrawEvent>,
+    mut redraw_writer: MessageWriter<RedrawEvent>,
     mut selections: ResMut<Selections>,
-    mut event_writer: EventWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
+    mut event_writer: MessageWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
 ) where
     S: ScreenTrait + 'static,
 {
@@ -100,7 +97,7 @@ pub fn input_system<S>(
                 .menu
                 .handle_selection(&selection, &mut event_writer);
         }
-        redraw_writer.send(RedrawEvent);
+        redraw_writer.write(RedrawEvent);
     }
 }
 
@@ -115,9 +112,9 @@ pub fn mouse_system<S>(
         ),
         Changed<Interaction>,
     >,
-    mut event_writer: EventWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
+    mut event_writer: MessageWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
     mut selections: ResMut<Selections>,
-    mut redraw_writer: EventWriter<RedrawEvent>,
+    mut redraw_writer: MessageWriter<RedrawEvent>,
 ) where
     S: ScreenTrait + 'static,
 {
@@ -148,7 +145,7 @@ pub fn mouse_system<S>(
                     menu_state
                         .menu
                         .handle_selection(&current, &mut event_writer);
-                    redraw_writer.send(RedrawEvent);
+                    redraw_writer.write(RedrawEvent);
                 }
             }
             Interaction::Hovered => {
@@ -175,7 +172,7 @@ pub fn cleanup_system<S>(
 {
     // Remove all menu elements
     for item in existing.iter() {
-        commands.entity(item).despawn_recursive();
+        commands.entity(item).despawn();
     }
     // Remove the resource again
     commands.remove_resource::<CleanUpUI>();
