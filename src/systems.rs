@@ -1,5 +1,5 @@
 use bevy::{
-    input::{gamepad::GamepadAxisChangedEvent, keyboard::KeyboardInput},
+    input::{gamepad::GamepadAxisChangedEvent, keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
 
@@ -12,7 +12,6 @@ use crate::{
 };
 
 // TODO: make this configurable by consumers
-//
 const STICK_THRESHOLD: f32 = 0.10;
 
 pub fn keyboard_input_system(
@@ -24,6 +23,9 @@ pub fn keyboard_input_system(
 ) {
     use NavigationEvent::*;
     for event in keyboard_input.read() {
+        if event.repeat || event.state == ButtonState::Released {
+            continue;
+        }
         match event.key_code {
             KeyCode::ArrowDown => {
                 writer.write(Down);
