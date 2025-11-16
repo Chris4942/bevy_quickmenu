@@ -20,6 +20,8 @@ pub use types::{
     PrimaryMenu, RedrawEvent, RichTextEntry, Selections, VerticalMenuComponent,
 };
 
+use crate::types::GamepadActivation;
+
 /// The quickmenu plugin.
 /// It requires multiple generic parameters in order to setup. A minimal example.
 /// For a full explanation refer to the examples or the README.
@@ -202,11 +204,14 @@ where
             .add_systems(
                 Update,
                 (
-                    systems::mouse_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::input_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::redraw_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::keyboard_input_system.run_if(resource_exists::<MenuState<S>>),
-                ),
+                    systems::mouse_system::<S>,
+                    systems::input_system::<S>,
+                    systems::redraw_system::<S>,
+                    systems::keyboard_input_system,
+                    systems::insert_gamepad_activation_system
+                        .run_if(any_match_filter::<(With<Gamepad>, Without<GamepadActivation>)>),
+                )
+                    .run_if(resource_exists::<MenuState<S>>),
             );
     }
 }

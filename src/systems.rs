@@ -1,14 +1,26 @@
-use bevy::{input::keyboard::KeyboardInput, prelude::*};
+use bevy::{
+    input::{gamepad::GamepadAxisChangedEvent, keyboard::KeyboardInput},
+    prelude::*,
+};
 
 use crate::{
-    types::{self, ButtonComponent, CleanUpUI, MenuAssets, NavigationEvent, QuickMenuComponent},
+    types::{
+        self, ButtonComponent, CleanUpUI, GamepadActivation, MenuAssets, NavigationEvent,
+        QuickMenuComponent,
+    },
     ActionTrait, MenuState, RedrawEvent, ScreenTrait, Selections,
 };
+
+// TODO: make this configurable by consumers
+//
+const STICK_THRESHOLD: f32 = 0.10;
 
 pub fn keyboard_input_system(
     mut keyboard_input: MessageReader<KeyboardInput>,
     mut writer: MessageWriter<NavigationEvent>,
+    mut axis_events: MessageReader<GamepadAxisChangedEvent>,
     gamepads: Query<&Gamepad>,
+    mut gamepad_activations: Query<&mut GamepadActivation>,
 ) {
     use NavigationEvent::*;
     for event in keyboard_input.read() {
@@ -45,24 +57,46 @@ pub fn keyboard_input_system(
         {
             writer.write(Back);
         }
-        // TODO: this block of code would detect inputs from the sticks, but the functions we were
-        // relying on have been removed without a modern equivalent
-        // if gamepad. {
-        //     for (axis, check_negative, action) in [
-        //         (GamepadAxis::LeftStickX, true, Back),
-        //         (GamepadAxis::LeftStickY, true, Down),
-        //         (GamepadAxis::LeftStickY, false, Up),
-        //         (GamepadAxis::RightStickX, true, Back),
-        //         (GamepadAxis::RightStickY, true, Down),
-        //         (GamepadAxis::RightStickY, false, Up),
-        //     ] {
-        //         if let Some(value) = gamepad.get(axis) {
-        //             if (check_negative && value < -0.1) || (!check_negative && value > 0.1) {
-        //                 writer.write(action);
-        //             }
-        //         }
-        //     }
-        // }
+    }
+
+    for event in axis_events.read() {
+        let Ok(mut gamepad_activation) = gamepad_activations.get_mut(event.entity) else {
+            continue;
+        };
+        let current = event.value;
+        let previous = gamepad_activation.insert(event.axis, event.value);
+        match event.axis {
+            GamepadAxis::LeftStickY | GamepadAxis::RightStickY => {
+                if cross_threshold(current, previous, STICK_THRESHOLD, true) {
+                    writer.write(Up);
+                } else if cross_threshold(current, previous, -STICK_THRESHOLD, false) {
+                    writer.write(Down);
+                }
+            }
+            GamepadAxis::LeftStickX | GamepadAxis::RightStickX => {
+                if cross_threshold(current, previous, -STICK_THRESHOLD, false) {
+                    writer.write(Back);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn cross_threshold(current: f32, previous: f32, v: f32, positive: bool) -> bool {
+    if positive {
+        current > v && v > previous
+    } else {
+        current < v && v < previous
+    }
+}
+
+pub fn insert_gamepad_activation_system(
+    gamepads: Query<Entity, (With<Gamepad>, Without<GamepadActivation>)>,
+    mut commands: Commands,
+) {
+    for gamepad in gamepads {
+        commands.entity(gamepad).insert(GamepadActivation::new());
     }
 }
 

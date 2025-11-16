@@ -563,3 +563,20 @@ impl<T: Into<Cow<'static, str>>> From<T> for WidgetId {
         WidgetId::new(value)
     }
 }
+
+#[derive(Component)]
+pub struct GamepadActivation {
+    previous_axis_activation: HashMap<GamepadAxis, f32>,
+}
+
+impl GamepadActivation {
+    pub fn new() -> Self {
+        Self {
+            previous_axis_activation: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, k: GamepadAxis, v: f32) -> f32 {
+        self.previous_axis_activation.insert(k, v).unwrap_or(0.0)
+    }
+}
