@@ -20,6 +20,8 @@ pub use types::{
     PrimaryMenu, RedrawEvent, RichTextEntry, Selections, VerticalMenuComponent,
 };
 
+use crate::types::GamepadActivation;
+
 /// The quickmenu plugin.
 /// It requires multiple generic parameters in order to setup. A minimal example.
 /// For a full explanation refer to the examples or the README.
@@ -193,8 +195,8 @@ where
         app.insert_resource(self.options.unwrap_or_default())
             .init_resource::<MenuAssets>()
             .insert_resource(Selections::default())
-            .add_event::<NavigationEvent>()
-            .add_event::<RedrawEvent>()
+            .add_message::<NavigationEvent>()
+            .add_message::<RedrawEvent>()
             .add_systems(
                 Update,
                 systems::cleanup_system::<S>.run_if(resource_exists::<CleanUpUI>),
@@ -202,11 +204,14 @@ where
             .add_systems(
                 Update,
                 (
-                    systems::mouse_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::input_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::redraw_system::<S>.run_if(resource_exists::<MenuState<S>>),
-                    systems::keyboard_input_system.run_if(resource_exists::<MenuState<S>>),
-                ),
+                    systems::mouse_system::<S>,
+                    systems::input_system::<S>,
+                    systems::redraw_system::<S>,
+                    systems::keyboard_input_system,
+                    systems::insert_gamepad_activation_system
+                        .run_if(any_match_filter::<(With<Gamepad>, Without<GamepadActivation>)>),
+                )
+                    .run_if(resource_exists::<MenuState<S>>),
             );
     }
 }
@@ -220,8 +225,8 @@ pub fn cleanup(commands: &mut Commands) {
 /// are generated as the user interacts with the menu
 pub trait ActionTrait: Debug + PartialEq + Eq + Clone + Copy + Hash + Send + Sync {
     type State;
-    type Event: Event + Send + Sync + 'static;
-    fn handle(&self, state: &mut Self::State, event_writer: &mut EventWriter<Self::Event>);
+    type Event: Message + Send + Sync + 'static;
+    fn handle(&self, state: &mut Self::State, event_writer: &mut MessageWriter<Self::Event>);
 }
 
 /// Each Menu / Screen uses this trait to define which menu items lead

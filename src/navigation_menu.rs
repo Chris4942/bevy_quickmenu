@@ -1,7 +1,6 @@
 //! Navigation Menu
 //! This is the primary horizontal menu which is used to host the various
 //! screens / vertical menus.
-use bevy::prelude::EventWriter;
 use bevy::prelude::*;
 use std::fmt::Debug;
 
@@ -47,12 +46,12 @@ where
     S: ScreenTrait + 'static,
 {
     pub fn show(&self, assets: &MenuAssets, selections: &Selections, commands: &mut Commands) {
-        let style = self
+        let node = self
             .stylesheet
-            .style
+            .node
             .as_ref()
             .cloned()
-            .unwrap_or_else(|| Style {
+            .unwrap_or_else(|| Node {
                 align_items: AlignItems::FlexStart,
                 flex_direction: FlexDirection::Row,
                 padding: UiRect::all(Val::Px(self.stylesheet.vertical_spacing)),
@@ -65,11 +64,7 @@ where
             .unwrap_or_else(|| Color::NONE.into());
 
         commands
-            .spawn(NodeBundle {
-                style,
-                background_color,
-                ..default()
-            })
+            .spawn((node, background_color))
             .insert(PrimaryMenu)
             .with_children(|parent| {
                 for entry in self.stack.iter() {
@@ -114,7 +109,7 @@ where
     pub fn handle_selection(
         &mut self,
         selection: &MenuSelection<S>,
-        event_writer: &mut EventWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
+        event_writer: &mut MessageWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
     ) {
         match selection {
             MenuSelection::Action(a) => a.handle(&mut self.state, event_writer),

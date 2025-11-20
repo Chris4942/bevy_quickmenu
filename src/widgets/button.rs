@@ -42,7 +42,7 @@ where
     A: ActionTrait<State = State> + 'static,
     S: ScreenTrait<Action = A> + 'static,
 {
-    fn build(self, parent: &mut ChildBuilder, assets: &MenuAssets) {
+    fn build(self, parent: &mut ChildSpawnerCommands, assets: &MenuAssets) {
         let ButtonWidget {
             text,
             style,
@@ -57,24 +57,24 @@ where
             (style.normal.bg, style.normal.fg)
         };
 
-        let text_style = TextStyle {
+        let font = TextFont {
             font: assets.font.clone(),
             font_size: style.size,
-            color: fg,
+            ..Default::default()
         };
+        let color = TextColor(fg);
 
         parent
-            .spawn(ButtonBundle {
-                style: Style {
+            .spawn((
+                Node {
                     margin: style.margin,
                     padding: style.padding,
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                background_color: BackgroundColor(bg),
-                ..default()
-            })
+                BackgroundColor(bg),
+            ))
             .insert(ButtonComponent {
                 style: style.clone(),
                 selection: selection.clone(),
@@ -82,7 +82,9 @@ where
                 selected,
             })
             .with_children(|parent| {
-                parent.spawn(text.bundle(&text_style));
+                for bundle in text.bundle(&font, &color) {
+                    parent.spawn(bundle);
+                }
             });
     }
 }

@@ -1,63 +1,104 @@
-use bevy::prelude::*;
+use bevy::{
+    input::{gamepad::GamepadAxisChangedEvent, keyboard::KeyboardInput, ButtonState},
+    prelude::*,
+};
 
 use crate::{
-    types::{self, ButtonComponent, CleanUpUI, MenuAssets, NavigationEvent, QuickMenuComponent},
+    types::{
+        self, ButtonComponent, CleanUpUI, GamepadActivation, MenuAssets, NavigationEvent,
+        QuickMenuComponent,
+    },
     ActionTrait, MenuState, RedrawEvent, ScreenTrait, Selections,
 };
 
+// TODO: make this configurable by consumers
+const STICK_THRESHOLD: f32 = 0.10;
+
 pub fn keyboard_input_system(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut writer: EventWriter<NavigationEvent>,
-    gamepads: Res<Gamepads>,
-    button_inputs: Res<ButtonInput<GamepadButton>>,
-    axes: Res<Axis<GamepadAxis>>,
+    mut keyboard_input: MessageReader<KeyboardInput>,
+    mut writer: MessageWriter<NavigationEvent>,
+    mut axis_events: MessageReader<GamepadAxisChangedEvent>,
+    gamepads: Query<&Gamepad>,
+    mut gamepad_activations: Query<&mut GamepadActivation>,
 ) {
     use NavigationEvent::*;
-    if keyboard_input.just_pressed(KeyCode::ArrowDown) {
-        writer.send(Down);
-    } else if keyboard_input.just_pressed(KeyCode::ArrowUp) {
-        writer.send(Up);
-    } else if keyboard_input.just_pressed(KeyCode::Enter) {
-        writer.send(Select);
-    } else if keyboard_input.just_pressed(KeyCode::Backspace) {
-        writer.send(Back);
+    for event in keyboard_input.read() {
+        if event.repeat || event.state == ButtonState::Released {
+            continue;
+        }
+        match event.key_code {
+            KeyCode::ArrowDown => {
+                writer.write(Down);
+            }
+            KeyCode::ArrowUp => {
+                writer.write(Up);
+            }
+            KeyCode::Enter => {
+                writer.write(Select);
+            }
+            KeyCode::Backspace => {
+                writer.write(Back);
+            }
+            _ => {}
+        };
     }
 
-    for gamepad in gamepads.iter() {
-        if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadDown)) {
-            writer.send(Down);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadUp))
+    for gamepad in gamepads {
+        if gamepad.just_pressed(GamepadButton::DPadDown) {
+            writer.write(Down);
+        } else if gamepad.just_pressed(GamepadButton::DPadUp) {
+            writer.write(Up);
+        } else if gamepad.just_pressed(GamepadButton::DPadRight) {
+            writer.write(Back);
+        } else if gamepad.just_pressed(GamepadButton::South)
+            || gamepad.just_pressed(GamepadButton::West)
         {
-            writer.send(Up);
-        } else if button_inputs
-            .just_pressed(GamepadButton::new(gamepad, GamepadButtonType::DPadRight))
+            writer.write(Select);
+        } else if gamepad.just_pressed(GamepadButton::East)
+            || gamepad.just_pressed(GamepadButton::North)
         {
-            writer.send(Back);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::South))
-            || button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::West))
-        {
-            writer.send(Select);
-        } else if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::East))
-            || button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::North))
-        {
-            writer.send(Back);
+            writer.write(Back);
         }
-        if axes.is_changed() {
-            for (axis, check_negative, action) in [
-                (GamepadAxisType::LeftStickX, true, Back),
-                (GamepadAxisType::LeftStickY, true, Down),
-                (GamepadAxisType::LeftStickY, false, Up),
-                (GamepadAxisType::RightStickX, true, Back),
-                (GamepadAxisType::RightStickY, true, Down),
-                (GamepadAxisType::RightStickY, false, Up),
-            ] {
-                if let Some(value) = axes.get(GamepadAxis::new(gamepad, axis)) {
-                    if (check_negative && value < -0.1) || (!check_negative && value > 0.1) {
-                        writer.send(action);
-                    }
+    }
+
+    for event in axis_events.read() {
+        let Ok(mut gamepad_activation) = gamepad_activations.get_mut(event.entity) else {
+            continue;
+        };
+        let current = event.value;
+        let previous = gamepad_activation.insert(event.axis, event.value);
+        match event.axis {
+            GamepadAxis::LeftStickY | GamepadAxis::RightStickY => {
+                if cross_threshold(current, previous, STICK_THRESHOLD, true) {
+                    writer.write(Up);
+                } else if cross_threshold(current, previous, -STICK_THRESHOLD, false) {
+                    writer.write(Down);
                 }
             }
+            GamepadAxis::LeftStickX | GamepadAxis::RightStickX => {
+                if cross_threshold(current, previous, -STICK_THRESHOLD, false) {
+                    writer.write(Back);
+                }
+            }
+            _ => {}
         }
+    }
+}
+
+fn cross_threshold(current: f32, previous: f32, v: f32, positive: bool) -> bool {
+    if positive {
+        current > v && v > previous
+    } else {
+        current < v && v < previous
+    }
+}
+
+pub fn insert_gamepad_activation_system(
+    gamepads: Query<Entity, (With<Gamepad>, Without<GamepadActivation>)>,
+    mut commands: Commands,
+) {
+    for gamepad in gamepads {
+        commands.entity(gamepad).insert(GamepadActivation::new());
     }
 }
 
@@ -66,7 +107,7 @@ pub fn redraw_system<S>(
     existing: Query<Entity, With<QuickMenuComponent>>,
     mut menu_state: ResMut<MenuState<S>>,
     selections: Res<Selections>,
-    redraw_reader: EventReader<RedrawEvent>,
+    redraw_reader: MessageReader<RedrawEvent>,
     assets: Res<MenuAssets>,
     // mut initial_render_done: Local<bool>,
 ) where
@@ -79,18 +120,18 @@ pub fn redraw_system<S>(
     }
     if can_redraw {
         for item in existing.iter() {
-            commands.entity(item).despawn_recursive();
+            commands.entity(item).despawn();
         }
         menu_state.menu.show(&assets, &selections, &mut commands);
     }
 }
 
 pub fn input_system<S>(
-    mut reader: EventReader<NavigationEvent>,
+    mut reader: MessageReader<NavigationEvent>,
     mut menu_state: ResMut<MenuState<S>>,
-    mut redraw_writer: EventWriter<RedrawEvent>,
+    mut redraw_writer: MessageWriter<RedrawEvent>,
     mut selections: ResMut<Selections>,
-    mut event_writer: EventWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
+    mut event_writer: MessageWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
 ) where
     S: ScreenTrait + 'static,
 {
@@ -100,7 +141,7 @@ pub fn input_system<S>(
                 .menu
                 .handle_selection(&selection, &mut event_writer);
         }
-        redraw_writer.send(RedrawEvent);
+        redraw_writer.write(RedrawEvent);
     }
 }
 
@@ -115,9 +156,9 @@ pub fn mouse_system<S>(
         ),
         Changed<Interaction>,
     >,
-    mut event_writer: EventWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
+    mut event_writer: MessageWriter<<<S as ScreenTrait>::Action as ActionTrait>::Event>,
     mut selections: ResMut<Selections>,
-    mut redraw_writer: EventWriter<RedrawEvent>,
+    mut redraw_writer: MessageWriter<RedrawEvent>,
 ) where
     S: ScreenTrait + 'static,
 {
@@ -148,7 +189,7 @@ pub fn mouse_system<S>(
                     menu_state
                         .menu
                         .handle_selection(&current, &mut event_writer);
-                    redraw_writer.send(RedrawEvent);
+                    redraw_writer.write(RedrawEvent);
                 }
             }
             Interaction::Hovered => {
@@ -175,7 +216,7 @@ pub fn cleanup_system<S>(
 {
     // Remove all menu elements
     for item in existing.iter() {
-        commands.entity(item).despawn_recursive();
+        commands.entity(item).despawn();
     }
     // Remove the resource again
     commands.remove_resource::<CleanUpUI>();

@@ -119,7 +119,7 @@ pub struct Stylesheet {
     pub label: StyleEntry,
     pub headline: StyleEntry,
     pub vertical_spacing: f32,
-    pub style: Option<Style>,
+    pub node: Option<Node>,
     pub background: Option<BackgroundColor>,
 }
 
@@ -130,7 +130,7 @@ impl Default for Stylesheet {
             label: StyleEntry::label(),
             headline: StyleEntry::headline(),
             vertical_spacing: 10.0,
-            style: None,
+            node: None,
             background: None,
         }
     }
@@ -142,8 +142,8 @@ impl Stylesheet {
         self
     }
 
-    pub fn with_style(mut self, style: Style) -> Self {
-        self.style = Some(style);
+    pub fn with_node(mut self, style: Node) -> Self {
+        self.node = Some(style);
         self
     }
 }
