@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use bevy::{
     input::{gamepad::GamepadAxisChangedEvent, keyboard::KeyboardInput, ButtonState},
     prelude::*,
@@ -211,14 +213,32 @@ pub fn mouse_system<S>(
 pub fn cleanup_system<S>(
     mut commands: Commands,
     existing: Query<Entity, With<types::QuickMenuComponent>>,
+    children: Query<&Children>,
+    texts: Query<(Entity, &Text)>,
 ) where
     S: ScreenTrait + 'static,
 {
+    let mut deleted_children: HashSet<Entity> = HashSet::new();
+
+    info!("In cleanup_system");
     // Remove all menu elements
     for item in existing.iter() {
+        for child in children.iter_descendants(item) {
+            deleted_children.insert(child);
+            if let Ok((_, text)) = texts.get(child) {
+                info!("Deleting {}", text.0);
+            }
+        }
+        info!("Removing: {:#?}", item);
         commands.entity(item).despawn();
     }
+    for (entity, text) in texts {
+        if !deleted_children.contains(&entity) {
+            info!("Did not delete {}", text.0);
+        }
+    }
     // Remove the resource again
+    info!("It let me finish the function");
     commands.remove_resource::<CleanUpUI>();
     // Remove the state
     commands.remove_resource::<MenuState<S>>();
