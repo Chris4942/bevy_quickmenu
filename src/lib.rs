@@ -211,7 +211,10 @@ where
                     systems::insert_gamepad_activation_system
                         .run_if(any_match_filter::<(With<Gamepad>, Without<GamepadActivation>)>),
                 )
-                    .run_if(resource_exists::<MenuState<S>>),
+                    .run_if(
+                        resource_exists::<MenuState<S>>
+                            .and(|res: Option<Res<CleanUpUI>>| !resource_exists(res)),
+                    ),
             );
     }
 }
